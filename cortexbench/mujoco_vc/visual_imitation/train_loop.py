@@ -23,6 +23,7 @@ import mj_envs, gym, mjrl.envs, dmc2gym
 import numpy as np, time as timer, multiprocessing, pickle, os, torch, gc
 import torch.nn as nn
 import torchvision.transforms as T
+import csv
 
 
 def set_seed(seed=None):
@@ -66,8 +67,8 @@ def bc_pvr_train_loop(config: dict) -> None:
     set_seed(config["seed"])
 
     # infer the demo location
-    demo_paths_loc = os.path.join(
-        config["data_dir"], config["env_kwargs"]["env_name"] + ".pickle"
+    demo_paths_loc = os.path.join(config["cwd"],
+                                  config["data_dir"], config["env_kwargs"]["env_name"] + ".pickle"
     )
     try:
         demo_paths = pickle.load(open(demo_paths_loc, "rb"))
@@ -152,6 +153,14 @@ def bc_pvr_train_loop(config: dict) -> None:
 
     highest_tr_score, highest_score = -np.inf, -np.inf
     highest_tr_success, highest_success = 0.0, 0.0
+
+    # save the evaluation results to csv for quick check
+    csv_result = [
+        ['Epoch', 'Score Mean', 'Success Percentage', 'Highest success', 'Best Score']
+    ]
+    with open('evaluation_scores.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_result)
     for epoch in tqdm(range(config["epochs"])):
         # move the policy to correct device
         policy.model.to(config["device"])
@@ -206,6 +215,11 @@ def bc_pvr_train_loop(config: dict) -> None:
             epoch_log["eval/success"] = success_percentage
             epoch_log["eval/highest_success"] = highest_success
             epoch_log["eval/highest_score"] = highest_score
+
+            csv_result.append([epoch, mean_score, success_percentage, highest_success, highest_score])
+            with open('evaluation_scores.csv', 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerows(csv_result)
 
             # log statistics on training paths
             if len(init_states) > 0:

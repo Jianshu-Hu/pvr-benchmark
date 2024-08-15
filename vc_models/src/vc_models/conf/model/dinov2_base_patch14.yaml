@@ -1,0 +1,11 @@
+_target_: vc_models.models.load_hf_model
+model_and_transform:
+  _target_: vc_models.models.general_pvr.pretrained_models.load_encoder
+  model_type: vit_base_patch14_dinov2.lvd142m
+  checkpoint_path: model_ckpts/vit_base_patch14_dinov2.lvd142m.bin
+metadata:
+  algo: DINOv2
+  model: vit_base_patch14_dinov2
+  data:
+    - LVD-142M
+  comment: Image size 518*518

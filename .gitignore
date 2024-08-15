@@ -4,6 +4,13 @@ outputs/
 multirun/
 .vscode/
 
+# dataset
+cortexbench/mujoco_vc/visual_imitation/data/
+# model ckpts
+vc_models/src/model_ckpts/
+# helper files
+cortexbench/mujoco_vc/visual_imitation/run_experiments/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

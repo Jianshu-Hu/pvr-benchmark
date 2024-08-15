@@ -29,3 +29,16 @@ def load_model(
         model.train()
 
     return model, embedding_dim, transform, metadata
+
+def load_hf_model(
+    model_and_transform,
+    metadata=None,
+):
+    model, transform = model_and_transform
+
+    with torch.no_grad():
+        transformed_img = transform(zero_img).unsqueeze(0)
+        embedding_dim = model.eval()(transformed_img).shape[1]
+        model.train()
+
+    return model, embedding_dim, transform, metadata
