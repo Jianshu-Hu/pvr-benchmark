@@ -1,0 +1,29 @@
+device: cuda
+embedding_name: ???
+env: ???
+
+dataset:
+  batch_size: 256
+  data_dir: ../cortexbench/mujoco_vc/visual_imitation/data/datasets/adroit-expert-v1.0/
+  env_name: ${env}
+  num_demos: 100
+  history_window: 3
+  proprio_key: proprio
+
+model:
+  target: dynamics.dynamics_models.DynamicsModule
+  params:
+    input_dim: ???
+    fuse_hidden_dim: [256, 256]
+    feature_dim: 50
+    action_dim: ???
+    dynamics_hidden_dim: [256, 256]
+
+
+lightning:
+  trainer:
+    default_root_dir: 'logs/'
+    devices: 1
+    max_epochs: 30
+    benchmark: True
+    accumulate_grad_batches: 1
