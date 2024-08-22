@@ -13,6 +13,9 @@ from mujoco_vc.model_loading import load_pretrained_model
 from mujoco_vc.supported_envs import ENV_TO_SUITE
 from typing import Union, Tuple
 
+from dynamics.train import TrainingModule as DynamicsModule
+from dynamics import dynamics_models_dir_path
+
 
 class MuJoCoPixelObsWrapper(gym.ObservationWrapper):
     def __init__(
@@ -93,6 +96,7 @@ class FrozenEmbeddingWrapper(gym.ObservationWrapper):
         device: str = "cuda",
         seed: int = None,
         add_proprio: bool = False,
+        ckpt_path: str = None,
         *args,
         **kwargs
     ):
@@ -135,12 +139,23 @@ class FrozenEmbeddingWrapper(gym.ObservationWrapper):
             self.proprio_dim = 0
             self.get_proprio = None
 
-        # final observation space
-        obs_dim = (
-            obs_dim
-            if obs_dim != None
-            else int(self.history_window * self.embedding_dim + self.proprio_dim)
-        )
+        # post-processing the features with loaded model
+        if ckpt_path is not None:
+            post_process_model = DynamicsModule.load_from_checkpoint(dynamics_models_dir_path + ckpt_path)
+            self.fusion_model = post_process_model.dynamics_module.fusion.eval()
+            # freeze the model
+            for p in self.fusion_model.parameters():
+                p.requires_grad = False
+            # final observation space
+            obs_dim = (self.fusion_model.out_dim)
+        else:
+            self.fusion_model = None
+            # final observation space
+            obs_dim = (
+                obs_dim
+                if obs_dim != None
+                else int(self.history_window * self.embedding_dim + self.proprio_dim)
+            )
         self.observation_space = Box(low=-np.inf, high=np.inf, shape=(obs_dim,))
 
     def observation(self, observation):
@@ -178,6 +193,10 @@ class FrozenEmbeddingWrapper(gym.ObservationWrapper):
         if self.proprio_dim > 0:
             proprio = self.get_proprio()
             obs = np.concatenate([obs, proprio])
+        if self.fusion_model:
+            with torch.no_grad():
+                obs = self.fusion_model(torch.tensor(obs).float().unsqueeze(0).to(self.device))
+                obs = obs.cpu().squeeze(0).numpy()
         return obs
 
     def get_obs(self):
@@ -204,6 +223,7 @@ def env_constructor(
     render_gpu_id: int = -1,
     seed: int = 123,
     add_proprio=False,
+    ckpt_path: str = None,
     *args,
     **kwargs
 ) -> GymEnv:
@@ -247,6 +267,7 @@ def env_constructor(
             device=device,
             seed=seed,
             add_proprio=add_proprio,
+            ckpt_path=ckpt_path,
         )
         e = GymEnv(e)
     else:

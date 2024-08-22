@@ -22,6 +22,9 @@ num_cpu           :   1                       # for rolling out paths when evalu
 num_demos         :   100                     # path to demo file auto-inferred from other inputs
 exp_notes         :   Access DMC envs using the dmc2gym package. Experts trained with DDPG from URLB.
 
+# new args related to fine-tuning
+ckpt_path: null
+
 # environment related kwargs
 env_kwargs:
     env_name      :   ${env}
@@ -37,6 +40,7 @@ env_kwargs:
     history_window :  3
     add_proprio   :   False
     proprio_key   :   None
+    ckpt_path: ${ckpt_path}
 
 # BC agent setup
 bc_kwargs:

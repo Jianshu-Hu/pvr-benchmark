@@ -37,8 +37,10 @@ class TrainingModule(pl.LightningModule):
         current_feature, action, next_feature = batch['features'].float(), batch['actions'].float(),\
                                                 batch['next_features'].float()
 
-        target, predicted_target = self.dynamics_module(current_feature, action, next_feature)
-        loss = nn.functional.mse_loss(target, predicted_target)
+        target, predicted_target, decoded_feature = self.dynamics_module(current_feature, action, next_feature)
+        predict_loss = nn.functional.mse_loss(target, predicted_target)
+        recon_loss = nn.functional.mse_loss(decoded_feature, current_feature)
+        loss = predict_loss+recon_loss
         # Logging to TensorBoard (if installed) by default
         self.log("train_loss", loss)
 
@@ -50,7 +52,8 @@ class TrainingModule(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(list(self.dynamics_module.fusion.parameters()) +
-                               list(self.dynamics_module.dynamics.parameters()), lr=1e-3)
+                               list(self.dynamics_module.dynamics.parameters()) +
+                               list(self.dynamics_module.decoder.parameters()), lr=1e-3)
         return optimizer
 
 

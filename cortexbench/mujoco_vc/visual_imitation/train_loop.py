@@ -25,6 +25,9 @@ import torch.nn as nn
 import torchvision.transforms as T
 import csv
 
+from dynamics.train import TrainingModule as DynamicsModule
+from dynamics import dynamics_models_dir_path
+
 
 def set_seed(seed=None):
     """
@@ -69,7 +72,7 @@ def bc_pvr_train_loop(config: dict) -> None:
     # infer the demo location
     demo_paths_loc = os.path.join(config["cwd"],
                                   config["data_dir"], config["env_kwargs"]["env_name"] + ".pickle"
-    )
+                                  )
     try:
         demo_paths = pickle.load(open(demo_paths_loc, "rb"))
     except:
@@ -119,6 +122,7 @@ def bc_pvr_train_loop(config: dict) -> None:
         history_window=config["env_kwargs"]["history_window"],
         fuse_embeddings=fuse_embeddings_flare,
         proprio_key=config["env_kwargs"]["proprio_key"],
+        ckpt_path=config["env_kwargs"]["ckpt_path"],
     )
     gc.collect()  # garbage collection to free up RAM
     dataset = FrozenEmbeddingDataset(
@@ -186,7 +190,7 @@ def bc_pvr_train_loop(config: dict) -> None:
 
         # perform evaluation rollouts every few epochs
         if (epoch % config["eval_frequency"] == 0 and epoch > 0) or (
-            epoch == config["epochs"] - 1
+                epoch == config["epochs"] - 1
         ):
             paths = sample_paths(
                 num_traj=config["eval_num_traj"],
@@ -269,7 +273,7 @@ def bc_pvr_train_loop(config: dict) -> None:
 
         # save policy and logging
         if (epoch % config["save_frequency"] == 0 and epoch > 0) or (
-            epoch == config["epochs"] - 1
+                epoch == config["epochs"] - 1
         ):
             # pickle.dump(agent.policy, open('./iterations/policy_%i.pickle' % epoch, 'wb'))
             if highest_score == mean_score:
@@ -277,11 +281,11 @@ def bc_pvr_train_loop(config: dict) -> None:
 
 
 def compute_metrics_from_paths(
-    env: GymEnv,
-    suite: str,
-    paths: list,
-    highest_score: float = -1.0,
-    highest_success: float = -1.0,
+        env: GymEnv,
+        suite: str,
+        paths: list,
+        highest_score: float = -1.0,
+        highest_success: float = -1.0,
 ):
     mean_score = np.mean([np.sum(p["rewards"]) for p in paths])
     if suite == "dmc":
@@ -303,11 +307,11 @@ def compute_metrics_from_paths(
 
 class FrozenEmbeddingDataset(Dataset):
     def __init__(
-        self,
-        paths: list,
-        history_window: int = 1,
-        fuse_embeddings: callable = None,
-        device: str = "cuda",
+            self,
+            paths: list,
+            history_window: int = 1,
+            fuse_embeddings: callable = None,
+            device: str = "cuda",
     ):
         self.paths = paths
         assert "embeddings" in self.paths[0].keys()
@@ -335,8 +339,8 @@ class FrozenEmbeddingDataset(Dataset):
                 for k in range(self.history_window)
             ]
             embeddings = embeddings[
-                ::-1
-            ]  # embeddings[-1] should be most recent embedding
+                         ::-1
+                         ]  # embeddings[-1] should be most recent embedding
             features = self.fuse_embeddings(embeddings)
             # features = torch.from_numpy(features).float().to(self.device)
             action = self.paths[traj_idx]["actions"][timestep]
@@ -345,7 +349,7 @@ class FrozenEmbeddingDataset(Dataset):
 
 
 def compute_embeddings(
-    paths: list, embedding_name: str, device: str = "cpu", chunk_size: int = 20
+        paths: list, embedding_name: str, device: str = "cpu", chunk_size: int = 20
 ):
     model, embedding_dim, transforms, metadata = load_pretrained_model(
         embedding_name=embedding_name
@@ -362,13 +366,13 @@ def compute_embeddings(
             if chunk_size * chunk < path_len:
                 with torch.no_grad():
                     inp_chunk = preprocessed_inp[
-                        chunk_size * chunk : min(chunk_size * (chunk + 1), path_len)
-                    ]
+                                chunk_size * chunk: min(chunk_size * (chunk + 1), path_len)
+                                ]
                     emb = model(inp_chunk.to(device))
                     # save embedding in RAM and free up GPU memory
                     emb = emb.to("cpu").data.numpy()
                 path["embeddings"][
-                    chunk_size * chunk : min(chunk_size * (chunk + 1), path_len)
+                chunk_size * chunk: min(chunk_size * (chunk + 1), path_len)
                 ] = emb
         del path["images"]  # no longer need the images, free up RAM
     return paths
@@ -379,8 +383,15 @@ def precompute_features(
     history_window: int = 1,
     fuse_embeddings: callable = None,
     proprio_key: str = None,
+    ckpt_path: str = None,
 ):
     assert "embeddings" in paths[0].keys()
+    # post-processing the features with loaded model
+    if ckpt_path is not None:
+        post_process_model = DynamicsModule.load_from_checkpoint(dynamics_models_dir_path+ckpt_path)
+        fusion_model = post_process_model.dynamics_module.fusion.eval()
+        device = next(post_process_model.dynamics_module.fusion.parameters()).device
+        print('load from the checkpoint: '+dynamics_models_dir_path+ckpt_path)
     for path in paths:
         features = []
         for t in range(path["embeddings"].shape[0]):
@@ -388,12 +399,17 @@ def precompute_features(
                 path["embeddings"][max(t - k, 0)] for k in range(history_window)
             ]
             emb_hist_t = emb_hist_t[
-                ::-1
-            ]  # emb_hist_t[-1] should correspond to time t embedding
+                         ::-1
+                         ]  # emb_hist_t[-1] should correspond to time t embedding
             feat_t = fuse_embeddings(emb_hist_t)
             if proprio_key not in [None, "None"]:
                 assert proprio_key in path["env_infos"].keys()
                 feat_t = np.concatenate([feat_t, path["env_infos"][proprio_key][t]])
+            # post-processing the features with loaded model
+            if ckpt_path:
+                with torch.no_grad():
+                    feat_t = fusion_model(torch.tensor(feat_t).float().unsqueeze(0).to(device))
+                    feat_t = feat_t.cpu().squeeze(0).numpy()
             features.append(feat_t.copy())
         path["features"] = np.array(features)
     return paths

@@ -29,6 +29,10 @@ def configure_jobs(config: dict) -> None:
 
     config = OmegaConf.structured(OmegaConf.to_yaml(config))
 
+    import sys
+    sys.path.append(cwd + '/../../../')
+    sys.path.append(cwd + '/../../../dynamics/')
+
     from train_loop import bc_pvr_train_loop
 
     config["cwd"] = cwd

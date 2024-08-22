@@ -15,6 +15,7 @@ cortexbench/mujoco_vc/visual_imitation/run_experiments/
 dynamics/logs
 dynamics/outputs
 dynamics/run_experiments
+dynamics/saved_ckpt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
